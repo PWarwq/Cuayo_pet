@@ -2,17 +2,29 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 import pygame
-import pygetwindow as gw
 import time
 import os
 import random
+import platform
+
+# OS Detect
+OS_TYPE = platform.system()
+if OS_TYPE == "Windows":
+    import pygetwindow as gw
+else:
+    try:
+        from Xlib import display, X
+    except ImportError:
+        print("Linux detected: Please run 'pip install python-xlib' for window detection features.")
 
 class SingleCuayo:
     def __init__(self, parent_win, assets, size):
         self.pet_win = tk.Toplevel(parent_win)
         self.pet_win.overrideredirect(True)
         self.pet_win.attributes('-topmost', True)
-        self.pet_win.wm_attributes('-transparentcolor', 'black')
+        
+        if OS_TYPE == "Windows":
+            self.pet_win.wm_attributes('-transparentcolor', 'black')
         
         self.assets = assets
         self.size = size
@@ -31,7 +43,7 @@ class SingleCuayo:
         
         self.pet_win.bind("<Button-3>", lambda e: self.remove())
 
-    def update(self, is_muted, speed_mult, last_win_title):
+    def update(self, is_muted, speed_mult):
         if not self.pet_win.winfo_exists(): return
         
         screen_w = self.pet_win.winfo_screenwidth()
@@ -97,9 +109,24 @@ class CuayoManager:
         
         self.load_all_assets()
         self.setup_ui()
-        
         self.add_pet()
         self.main_loop()
+
+    def get_active_window_title(self):
+        """Cross-platform active window detection"""
+        try:
+            if OS_TYPE == "Windows":
+                win = gw.getActiveWindow()
+                return win.title if win else None
+            else:
+                # Linux/X11 detection
+                d = display.Display()
+                root = d.screen().root
+                win_id = root.get_full_property(d.intern_atom('_NET_ACTIVE_WINDOW'), X.AnyPropertyType).value[0]
+                win_obj = d.create_resource_object('window', win_id)
+                return win_obj.get_wm_name()
+        except:
+            return None
 
     def load_all_assets(self):
         img_p, snd_p = "Img/", "soundEffect/"
@@ -115,12 +142,11 @@ class CuayoManager:
                 's_rotate': pygame.mixer.Sound(os.path.join(snd_p, "rotate.mp3"))
             }
         except Exception as e:
-            print(f"Error: {e}"); exit()
+            print(f"Error loading assets: {e}"); exit()
 
     def setup_ui(self):
         style = ttk.Style()
         style.theme_use('clam')
-        
         style.configure("TButton", font=("Segoe UI", 10, "bold"), background="#45475a", foreground="white")
         style.configure("TLabel", background="#1e1e2e", foreground="#cdd6f4", font=("Segoe UI", 10))
         
@@ -129,10 +155,10 @@ class CuayoManager:
         count_frame = tk.Frame(self.root, bg="#1e1e2e")
         count_frame.pack(pady=10)
         
-        tk.Button(count_frame, text=" - ", command=self.remove_pet, bg="#f38ba8", fg="white", width=4, font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10)
+        tk.Button(count_frame, text=" - ", command=self.remove_pet, bg="#f38ba8", fg="white", width=4).grid(row=0, column=0, padx=10)
         self.lbl_count = tk.Label(count_frame, text="1", bg="#1e1e2e", fg="white", font=("Arial", 14, "bold"))
         self.lbl_count.grid(row=0, column=1)
-        tk.Button(count_frame, text=" + ", command=self.add_pet, bg="#a6e3a1", fg="black", width=4, font=("Arial", 12, "bold")).grid(row=0, column=2, padx=10)
+        tk.Button(count_frame, text=" + ", command=self.add_pet, bg="#a6e3a1", fg="black", width=4).grid(row=0, column=2, padx=10)
 
         self.btn_mute = tk.Button(self.root, text="MUTE SOUND", command=self.toggle_mute, bg="#89b4fa", width=20)
         self.btn_mute.pack(pady=10)
@@ -163,15 +189,17 @@ class CuayoManager:
         self.speed_mult = float(val)
 
     def main_loop(self):
-        try:
-            curr_win = gw.getActiveWindow()
-            if curr_win and curr_win != self.last_win:
-                self.last_win = curr_win
-                for p in self.pets: p.trigger_rotate(self.is_muted)
-        except: pass
+        curr_win = self.get_active_window_title()
+        if curr_win and curr_win != self.last_win:
+            self.last_win = curr_win
+            for p in self.pets: p.trigger_rotate(self.is_muted)
+
+        # Remove dead pets from list
+        self.pets = [p for p in self.pets if p.pet_win.winfo_exists()]
+        self.lbl_count.config(text=str(len(self.pets)))
 
         for p in self.pets:
-            p.update(self.is_muted, self.speed_mult, self.last_win)
+            p.update(self.is_muted, self.speed_mult)
             
         self.root.after(30, self.main_loop)
 
