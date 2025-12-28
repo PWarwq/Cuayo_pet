@@ -76,10 +76,10 @@ This application is have a big sound
 
 *Developed with pure absurdity.*
 
-```
 
----
-
-##Personal Note: 
+## Personal Note: 
 *I don't really care if you sell or reuse this code,*
 *but you can add new features if you want xD.*
+
+---
+# Update : linux support
